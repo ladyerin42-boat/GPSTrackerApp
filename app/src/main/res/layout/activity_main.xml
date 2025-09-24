@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Map view -->
+    <org.osmdroid.views.MapView
+        android:id="@+id/map"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <!-- Bottom info panel -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#AAFFFFFF"
+        android:layout_alignParentBottom="true">
+
+        <!-- Radius label -->
+        <TextView
+            android:id="@+id/tvRadiusLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ánchor radius"
+            android:textSize="16sp"
+            android:textColor="#000000"/>
+
+        <!-- Radius slider -->
+        <SeekBar
+            android:id="@+id/seekBarRadius"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="50"/>
+
+        <!-- Info text: radius & GPS accuracy -->
+        <TextView
+            android:id="@+id/tvInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Radius: 50 m | Accuracy: 0 m"
+            android:textSize="14sp"
+            android:textColor="#000000"
+            android:paddingTop="4dp"/>
+    </LinearLayout>
+
+</RelativeLayout>
