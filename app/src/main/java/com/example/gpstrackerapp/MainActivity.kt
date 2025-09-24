@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.location.Location
 import android.media.MediaPlayer
 import android.os.Bundle
+import android.widget.Button
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -35,26 +36,34 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var tvInfo: TextView
     private lateinit var seekBarRadius: SeekBar
+    private lateinit var btnStartTrack: Button
     private lateinit var mediaPlayer: MediaPlayer
+
+    private val desiredAccuracyMeters = 10f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().load(applicationContext, getSharedPreferences("osmdroid", MODE_PRIVATE))
         setContentView(R.layout.activity_main)
 
+        // Bind UI elements
         map = findViewById(R.id.map)
-        map.setMultiTouchControls(true)
         tvInfo = findViewById(R.id.tvInfo)
         seekBarRadius = findViewById(R.id.seekBarRadius)
+        btnStartTrack = findViewById(R.id.btnStartTrack)
 
+        map.setMultiTouchControls(true)
         mediaPlayer = MediaPlayer.create(this, R.raw.alarm)
 
-        // Location permission check
+        // Request location permission if needed
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                1
+            )
             return
         }
 
@@ -64,47 +73,32 @@ class MainActivity : AppCompatActivity() {
         myLocationOverlay.enableMyLocation()
         map.overlays.add(myLocationOverlay)
 
-        // Wait for first GPS fix
-        myLocationOverlay.runOnFirstFix {
-            runOnUiThread {
-                val myPos: GeoPoint? = myLocationOverlay.myLocation
-                if (myPos != null) {
-                    map.controller.setZoom(16.0)
-                    map.controller.setCenter(myPos)
+        // Set initial map center
+        val lastLocation: Location? = locationProvider.lastKnownLocation
+        if (lastLocation != null) {
+            map.controller.setCenter(GeoPoint(lastLocation.latitude, lastLocation.longitude))
+            map.controller.setZoom(16.0)
+        } else {
+            map.controller.setCenter(GeoPoint(0.0, 0.0)) // fallback world center
+            map.controller.setZoom(16.0)
+        }
 
-                    // Place draggable anchor marker
-                    anchorMarker = Marker(map).apply {
-                        position = myPos
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        isDraggable = true
-                        icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.anchor_icon)
-                        setOnMarkerDragListener(object : Marker.OnMarkerDragListener {
-                            override fun onMarkerDrag(marker: Marker?) {
-                                marker?.position?.let { drawAnchorCircle(it, anchorRadiusMeters) }
-                            }
-                            override fun onMarkerDragEnd(marker: Marker?) {}
-                            override fun onMarkerDragStart(marker: Marker?) {}
-                        })
-                    }
-                    map.overlays.add(anchorMarker)
-                    drawAnchorCircle(myPos, anchorRadiusMeters)
+        // Poll GPS accuracy to enable Start Track button
+        checkAccuracyAndEnableButton()
 
-                    // Start drift monitoring
-                    startDriftMonitoring()
-
-                    // Start track line
-                    trackLine = Polygon(map).apply {
-                        outlinePaint.color = Color.BLUE
-                        outlinePaint.strokeWidth = 4f
-                        points = trackPoints
-                    }
-                    map.overlays.add(trackLine)
-                    startTracking()
-                }
+        // Button click starts tracking
+        btnStartTrack.setOnClickListener {
+            val location: Location? = locationProvider.lastKnownLocation
+            if (location != null) {
+                val geoPoint = GeoPoint(location.latitude, location.longitude)
+                setupAnchor(geoPoint)
+                btnStartTrack.isEnabled = false
+            } else {
+                Toast.makeText(this, "GPS location not available yet", Toast.LENGTH_SHORT).show()
             }
         }
 
-        // SeekBar for radius
+        // SeekBar listener
         anchorRadiusMeters = seekBarRadius.progress.toDouble()
         updateInfo()
         seekBarRadius.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -117,13 +111,65 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        // Periodically update info box
+        // Periodically update info text
         map.postDelayed(object : Runnable {
             override fun run() {
                 updateInfo()
                 map.postDelayed(this, 5000)
             }
         }, 5000)
+    }
+
+    // Poll GPS accuracy and enable Start Track button when sufficient
+    private fun checkAccuracyAndEnableButton() {
+        val location: Location? = locationProvider.lastKnownLocation
+        if (location != null) {
+            // Center map on current location
+            map.controller.setCenter(GeoPoint(location.latitude, location.longitude))
+            if (location.accuracy <= desiredAccuracyMeters) {
+                btnStartTrack.isEnabled = true
+            } else {
+                btnStartTrack.isEnabled = false
+            }
+        } else {
+            btnStartTrack.isEnabled = false
+        }
+        // Continue polling
+        map.postDelayed({ checkAccuracyAndEnableButton() }, 1000)
+    }
+
+    // Anchor placement and start drift monitoring/tracking
+    private fun setupAnchor(location: GeoPoint) {
+        map.controller.setZoom(16.0)
+        map.controller.setCenter(location)
+
+        anchorMarker = Marker(map).apply {
+            position = location
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            isDraggable = true
+            icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.anchor_icon)
+            setOnMarkerDragListener(object : Marker.OnMarkerDragListener {
+                override fun onMarkerDrag(marker: Marker?) {
+                    marker?.position?.let { drawAnchorCircle(it, anchorRadiusMeters) }
+                }
+                override fun onMarkerDragEnd(marker: Marker?) {}
+                override fun onMarkerDragStart(marker: Marker?) {}
+            })
+        }
+        map.overlays.add(anchorMarker)
+        drawAnchorCircle(location, anchorRadiusMeters)
+
+        // Start monitoring and tracking
+        startDriftMonitoring()
+        startTracking()
+
+        // Track line overlay
+        trackLine = Polygon(map).apply {
+            outlinePaint.color = Color.BLUE
+            outlinePaint.strokeWidth = 4f
+            points = trackPoints
+        }
+        map.overlays.add(trackLine)
     }
 
     private fun drawAnchorCircle(center: GeoPoint, radius: Double) {
