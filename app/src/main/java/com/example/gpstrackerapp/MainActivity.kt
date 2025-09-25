@@ -55,6 +55,10 @@ class MainActivity : AppCompatActivity() {
         map.setMultiTouchControls(true)
         mediaPlayer = MediaPlayer.create(this, R.raw.alarm)
 
+        // Initialize button as disabled and showing loading
+        btnStartTrack.isEnabled = false
+        btnStartTrack.text = "Loading GPS…"
+
         // Request location permission if needed
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
@@ -83,7 +87,7 @@ class MainActivity : AppCompatActivity() {
             map.controller.setZoom(16.0)
         }
 
-        // Poll GPS accuracy to enable Start Track button
+        // Poll GPS accuracy to update button
         checkAccuracyAndEnableButton()
 
         // Button click starts tracking
@@ -120,23 +124,28 @@ class MainActivity : AppCompatActivity() {
         }, 5000)
     }
 
-    // Poll GPS accuracy and enable Start Track button when sufficient
+    // Poll GPS accuracy and update button label/state
     private fun checkAccuracyAndEnableButton() {
         val location: Location? = locationProvider.lastKnownLocation
+
         if (location != null) {
-            // Center map on current location
             map.controller.setCenter(GeoPoint(location.latitude, location.longitude))
             if (location.accuracy <= desiredAccuracyMeters) {
                 btnStartTrack.isEnabled = true
+                btnStartTrack.text = "Start Track"
             } else {
                 btnStartTrack.isEnabled = false
+                btnStartTrack.text = "Loading GPS… (accuracy too low)"
             }
         } else {
             btnStartTrack.isEnabled = false
+            btnStartTrack.text = "Loading GPS… (no signal)"
         }
-        // Continue polling
+
+        // Poll every second
         map.postDelayed({ checkAccuracyAndEnableButton() }, 1000)
     }
+
 
     // Anchor placement and start drift monitoring/tracking
     private fun setupAnchor(location: GeoPoint) {
@@ -177,10 +186,19 @@ class MainActivity : AppCompatActivity() {
             anchorCircle = Polygon(map)
             map.overlays.add(anchorCircle)
         }
+
         anchorCircle?.apply {
-            fillColor = Color.argb(50, 0, 255, 0)
-            strokeColor = Color.GREEN
-            strokeWidth = 3f
+            // No fill color
+            fillColor = Color.TRANSPARENT
+
+            // Stroke / outline in reddish-pink
+            outlinePaint.apply {
+                color = Color.rgb(255, 105, 180) // reddish-pink
+                strokeWidth = 6f
+                style = android.graphics.Paint.Style.STROKE
+            }
+
+            // Generate circle points
             points = mutableListOf<GeoPoint>().apply {
                 for (i in 0..36) {
                     val angle = Math.toRadians(i * 10.0)
@@ -197,7 +215,25 @@ class MainActivity : AppCompatActivity() {
             override fun run() {
                 val location: Location? = locationProvider.lastKnownLocation
                 val anchor: GeoPoint? = anchorMarker?.position
-                if (location != null && anchor != null) {
+
+                if (location == null) {
+                    // GPS lost
+                    Toast.makeText(
+                        this@MainActivity,
+                        "⚠️ GPS signal lost!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    mediaPlayer.start()
+                } else if (location.accuracy > desiredAccuracyMeters) {
+                    // Accuracy poor
+                    Toast.makeText(
+                        this@MainActivity,
+                        "⚠️ GPS accuracy too low (${location.accuracy.toInt()} m)!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    mediaPlayer.start()
+                } else if (anchor != null) {
+                    // Check drift as before
                     val distance = FloatArray(1)
                     android.location.Location.distanceBetween(
                         anchor.latitude, anchor.longitude,
@@ -212,10 +248,13 @@ class MainActivity : AppCompatActivity() {
                         mediaPlayer.start()
                     }
                 }
+
+                // Repeat every 5 seconds
                 map.postDelayed(this, 5000)
             }
         }, 5000)
     }
+
 
     private fun startTracking() {
         map.postDelayed(object : Runnable {

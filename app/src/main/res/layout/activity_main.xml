@@ -21,12 +21,13 @@
         <!-- Start Track button -->
         <Button
             android:id="@+id/btnStartTrack"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Start Track"
+            android:text="Loading GPS…"
             android:enabled="false"
             android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="8dp"
+            android:contentDescription="Start tracking when GPS accuracy is sufficient" />
 
         <!-- Static radius label -->
         <TextView
@@ -36,7 +37,7 @@
             android:text="Anchor radius"
             android:textSize="16sp"
             android:textColor="@android:color/white"
-            android:layout_marginBottom="4dp"/>
+            android:layout_marginBottom="4dp" />
 
         <!-- Radius slider -->
         <SeekBar
@@ -45,6 +46,7 @@
             android:layout_height="wrap_content"
             android:max="100"
             android:progress="50"
+            android:thumb="@drawable/thumb_circle"
             android:thumbTint="@android:color/holo_blue_light"
             android:progressTint="@android:color/holo_blue_light"
             android:layout_marginBottom="4dp"/>
@@ -57,7 +59,8 @@
             android:text="Radius: 50 m | Accuracy: 0 m"
             android:textSize="14sp"
             android:textColor="@android:color/white"
-            android:paddingTop="4dp"/>
+            android:paddingTop="4dp" />
+
     </LinearLayout>
 
 </RelativeLayout>
